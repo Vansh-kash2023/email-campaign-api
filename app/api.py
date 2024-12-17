@@ -1,49 +1,30 @@
 from fastapi import APIRouter, HTTPException, FastAPI
-from pydantic import BaseModel
 from app.gpt import generate_campaign_emails
+from app.models import CampaignResponse, Account
 from typing import List
+from pydantic import BaseModel
 
-# Define the input model
+# Input Models
 class Contact(BaseModel):
     name: str
     email: str
     job_title: str
 
-class Account(BaseModel):
-    account_name: str
-    industry: str
-    pain_points: List[str]
-    contacts: List[Contact]
-    campaign_objective: str
-
 class CampaignRequest(BaseModel):
     accounts: List[Account]
     number_of_emails: int
 
-# Define the response model
-class Email(BaseModel):
-    subject: str
-    body: str
-    call_to_action: str
-
-class CampaignResponse(BaseModel):
-    account_name: str
-    emails: List[Email]
-
-# Initialize the router
+# FastAPI Setup
 router = APIRouter()
 
 @router.post("/generate-campaign/", response_model=List[CampaignResponse])
 async def create_campaign(request: CampaignRequest):
     try:
-        # Call the GPT function to generate campaign emails
         campaigns = await generate_campaign_emails(request)
         return campaigns
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-# Create FastAPI instance
-app = FastAPI()
-
-# Include the router in the app
+# Main FastAPI app
+app = FastAPI(title="ABM Email Campaign API")
 app.include_router(router)
