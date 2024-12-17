@@ -22,12 +22,15 @@ async def generate_campaign_emails(request):
 
             # Call OpenAI's API to generate an email
             try:
-                response = openai.Completion.create(
-                    model="text-davinci-003",  # Use a suitable model, for example, "text-davinci-003"
-                    prompt=prompt,
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",  # Use gpt-3.5-turbo instead of text-davinci-003
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": prompt}
+                    ],
                     max_tokens=200
                 )
-                email_content = response.choices[0].text.strip()
+                email_content = response.choices[0].message['content'].strip()  # Access message content
                 subject = f"Campaign Email for {account_name} - {i+1}"
                 body = email_content
                 call_to_action = "Learn more"  # You can adjust this depending on your requirements

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, FastAPI
 from pydantic import BaseModel
 from app.gpt import generate_campaign_emails
 from typing import List
@@ -41,3 +41,9 @@ async def create_campaign(request: CampaignRequest):
         return campaigns
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+# Create FastAPI instance
+app = FastAPI()
+
+# Include the router in the app
+app.include_router(router)
