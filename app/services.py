@@ -1,39 +1,67 @@
-import requests
+import os
+import re
+from dotenv import load_dotenv
+import google.generativeai as genai
 from app.models import InputData, Campaign, Email
 import logging
+import asyncio
+
+# Load environment variables from the .env file
+load_dotenv()
 
 # Initialize logging
 logging.basicConfig(level=logging.DEBUG)
 
-# Gemini API endpoint and API key (replace with your actual API key)
-GEMINI_API_KEY = "AIzaSyCduDg8TcCuba9od_VU6ElOlOHIsvnHmT4"
-GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"  # Replace with the correct URL
-  # Replace with your actual API key
+# Configure the Gemini API using the API key from the environment variable
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+# Set the generation configuration for Gemini API
+generation_config = {
+    "temperature": 1,
+    "top_p": 0.95,
+    "top_k": 40,
+    "max_output_tokens": 8192,
+    "response_mime_type": "text/plain",
+}
+
+# Create the Gemini model
+model = genai.GenerativeModel(
+    model_name="gemini-2.0-flash-exp",
+    generation_config=generation_config,
+)
 
 def generate_prompt(account, email_index):
     """
     Generate a prompt for Gemini API based on account data.
     """
+    # Prepare pain points for the email content
+    pain_points = ", ".join(account.pain_points)
+
+    # Adjust the prompt based on the campaign objective
+    if account.campaign_objective == "nurturing":
+        campaign_goal = "nurture the lead and educate them about the benefits of your product/service"
+    elif account.campaign_objective == "upselling":
+        campaign_goal = "upsell your product or service"
+    else:
+        campaign_goal = "raise awareness about your offerings"
+
     return f"""
-    You are a marketing expert specializing in the software industry. Write email {email_index} of a nurturing drip campaign for Example Corp, a software company facing challenges with scaling and tech debt.
+    You are a marketing expert specializing in the software industry. Write email {email_index} of a {account.campaign_objective} drip campaign for {account.account_name}, a software company facing challenges with {pain_points}.
 
-    * Target audience: John Doe, CEO of Example Corp
-    * Goal: Nurture the lead and educate them about the benefits of your product/service in overcoming scaling issues and tech debt.
-
-    *Body:*
-
+    * Target audience: {account.contacts[0].name}, {account.contacts[0].job_title} of {account.account_name}
+    * Goal: {campaign_goal}
+    
+    *Body:* 
     * Briefly introduce yourself and your company.
-    * Acknowledge the common challenges faced by software companies like scaling and tech debt.
-    * Explain how your product/service can help Example Corp address these challenges with specific examples.
+    * Acknowledge the common challenges faced by software companies like {pain_points}.
+    * Explain how your product/service can help {account.account_name} address these challenges with specific examples.
     * Use a positive and confident tone, highlighting the value proposition of your offering.
 
-    *Call to action:*
+    *Call to action:* 
+    * Include a clear call to action, such as scheduling a demo or requesting a free consultation, to learn more about how your product/service can benefit {account.account_name}.
 
-    * Include a clear call to action, such as scheduling a demo or requesting a free consultation, to learn more about how your product/service can benefit Example Corp.
-
-    *Sign-off:*
-
-    Thank John Doe for his time and consideration. Include your contact information.
+    *Sign-off:* 
+    Thank {account.contacts[0].name} for their time and consideration. Include your contact information.
 
     The tone should be professional, friendly, and personalized.
     """
@@ -42,55 +70,58 @@ async def call_gemini(prompt):
     """
     Generate text using the Gemini API.
     """
-    headers = {
-        "Authorization": f"Bearer {GEMINI_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "prompt": prompt,
-        "max_length": 1500,
-        "temperature": 0.9,
-        "top_p": 0.95,
-        "do_sample": True
-    }
+    try:
+        # Start a chat session with Gemini
+        chat_session = model.start_chat(history=[])
 
-    logging.debug(f"Prompt: {prompt}")
+        # Send the generated prompt to Gemini and get the response
+        response = chat_session.send_message(prompt)
 
-    # Make the request to the Gemini API
-    response = requests.post(GEMINI_API_URL, json=payload, headers=headers)
+        # Extract the generated text from the response
+        generated_text = response.text
+        logging.debug(f"Generated Text: {generated_text}")
 
-    # Check for successful response
-    if response.status_code != 200:
-        logging.error(f"Error generating text with Gemini: {response.text}")
+        # Clean up and parse the response
+        return clean_and_parse_response(generated_text)
+
+    except Exception as e:
+        logging.error(f"Error generating text with Gemini: {str(e)}")
         return {}
 
-    # Parse the response
-    generated_text = response.json().get("generated_text", "")
-    logging.debug(f"Generated Text: {generated_text}")
+def clean_and_parse_response(generated_text):
+    """
+    Clean up and parse the response from Gemini API.
+    """
+    # Regular expressions to capture sections
+    subject_regex = r"Subject:\s*(.*?)(?=\n|$)"
+    body_regex = r"Body:\s*(.*?)(?=Call to action:|$)"
+    call_to_action_regex = r"Call to action:\s*(.*?)(?=\n|$)"
 
-    # Parsing the generated response into structured content
-    lines = generated_text.split("\n")
+    # Extract subject, body, and call to action using regex
+    subject = re.search(subject_regex, generated_text, re.DOTALL)
+    body = re.search(body_regex, generated_text, re.DOTALL)
+    call_to_action = re.search(call_to_action_regex, generated_text, re.DOTALL)
 
-    subject = ""
-    body = []
-    call_to_action = ""
+    # Clean up the extracted content (strip unnecessary whitespace or explanation text)
+    subject_text = subject.group(1).strip() if subject else ""
+    body_text = body.group(1).strip() if body else ""
+    call_to_action_text = call_to_action.group(1).strip() if call_to_action else ""
 
-    for line in lines:
-        line = line.strip()
-        if line.lower().startswith("subject:"):
-            subject = line.replace("Subject:", "").strip()
-        elif line.lower().startswith("body:"):
-            body.append(line.replace("Body:", "").strip())
-        elif line.lower().startswith("call to action:"):
-            call_to_action = line.replace("Call to action:", "").strip()
+    # Log the cleaned sections for debugging
+    logging.debug(f"Cleaned Subject: {subject_text}")
+    logging.debug(f"Cleaned Body: {body_text}")
+    logging.debug(f"Cleaned Call to Action: {call_to_action_text}")
 
-    body_content = " ".join(body).strip()
+    # Check if the email has valid content
+    if not subject_text or not body_text or not call_to_action_text:
+        logging.warning("One of the sections is empty. Skipping this email.")
+        return {}
 
+    # Return structured response
     return {
-        "subject": subject,
-        "body": body_content,
-        "call_to_action": call_to_action
+        "subject": subject_text,
+        "body": body_text,
+        "call_to_action": call_to_action_text
     }
 
 async def generate_email_campaign(data: InputData):
@@ -108,16 +139,33 @@ async def generate_email_campaign(data: InputData):
             prompt = generate_prompt(account, i + 1)
             response = await call_gemini(prompt)
 
-            # Append the generated emails
-            emails.append(
-                Email(
-                    subject=response.get("subject", ""),
-                    body=response.get("body", ""),
-                    call_to_action=response.get("call_to_action", ""),
-                )
-            )
+            # Check for valid response
+            if response:
+                finish_reason = response.get("finish_reason")
+                if finish_reason == "RECITATION":
+                    logging.warning(f"Email {i+1} for {account.account_name} was a recitation, skipping.")
+                    continue
+
+                subject = response.get("subject")
+                body = response.get("body")
+                call_to_action = response.get("call_to_action")
+
+                # Check if the necessary fields are populated
+                if subject and body and call_to_action:
+                    emails.append(
+                        Email(
+                            subject=subject,
+                            body=body,
+                            call_to_action=call_to_action,
+                        )
+                    )
+                else:
+                    logging.warning(f"Email {i+1} for {account.account_name} is missing required fields, skipping.")
+            else:
+                logging.warning(f"Email {i+1} for {account.account_name} generated empty response, skipping.")
 
         # Append campaign data for the account
-        campaigns.append(Campaign(account_name=account.account_name, emails=emails))
+        if emails:  # Only append campaigns that have valid emails
+            campaigns.append(Campaign(account_name=account.account_name, emails=emails))
 
-    return campaigns
+    return campaigns  # Directly return the list of campaigns
