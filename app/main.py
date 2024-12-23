@@ -1,5 +1,6 @@
 import os
 import logging
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -21,11 +22,16 @@ app = FastAPI(
     version="1.0.0"
 )
 
-templates = Jinja2Templates(directory="templates")
+BASE_DIR = Path(__file__).resolve().parent.parent
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    try:
+        return templates.TemplateResponse("index.html", {"request": request})
+    except Exception as e:
+        logging.error(f"Error rendering template at '/': {str(e)}")
+        raise HTTPException(status_code=500, detail="Error rendering template")
 
 @app.post("/generate_campaign", response_model=SuccessResponse, responses={400: {"model": ErrorResponse}})
 async def generate_campaign(data: InputData):
@@ -34,14 +40,13 @@ async def generate_campaign(data: InputData):
         return {"campaigns": result}
     except Exception as e:
         logging.error(f"Error generating campaign: {str(e)}")
-        raise HTTPException(status_code=400, detail={str(e)})
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    return {"status": "ok"}
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
-    logging.info(f"Starting server on 0.0.0.0:{port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
