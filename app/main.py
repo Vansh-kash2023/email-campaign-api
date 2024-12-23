@@ -1,9 +1,20 @@
-from fastapi import FastAPI, HTTPException, Request
+import os
+import logging
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-
 from app.models import InputData, SuccessResponse, ErrorResponse
 from app.services import generate_email_campaign
+from fastapi import Request
+
+if not os.path.exists('logs'):
+    os.makedirs('logs')
+
+logging.basicConfig(
+    filename='logs/error.log',
+    level=logging.ERROR,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 app = FastAPI(
     title="Personalized Email Drip Campaign API",
@@ -11,23 +22,22 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Set up templates directory
 templates = Jinja2Templates(directory="templates")
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
-    """
-    Serve the landing page with details about the API.
-    """
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/generate_campaign", response_model=SuccessResponse, responses={400: {"model": ErrorResponse}})
 async def generate_campaign(data: InputData):
-    """
-    Generate a personalized email drip campaign based on the input account data.
-    """
     try:
         result = await generate_email_campaign(data)
         return {"campaigns": result}
     except Exception as e:
+        logging.error(f"Error generating campaign: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

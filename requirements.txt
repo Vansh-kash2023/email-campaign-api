@@ -5,3 +5,5 @@ python-dotenv
 pydantic
 pytest
 pytest-asyncio
+jinja2
+gunicorn
