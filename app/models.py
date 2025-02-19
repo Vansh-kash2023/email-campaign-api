@@ -1,7 +1,6 @@
 from typing import List, Literal
 from pydantic import BaseModel, EmailStr
 
-# Input Data Models
 class Contact(BaseModel):
     name: str
     email: EmailStr
@@ -18,7 +17,6 @@ class InputData(BaseModel):
     accounts: List[Account]
     number_of_emails: int
 
-# Output Data Models
 class Email(BaseModel):
     subject: str
     body: str

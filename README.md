@@ -1,11 +1,8 @@
-
----
-
 ## **Personalized Email Drip Campaign API**
 
 ### **Overview**
 
-This project provides an API for generating personalized email sequences for Account-Based Marketing (ABM) campaigns. It uses OpenAI's GPT model to generate email content based on provided data, including account details, pain points, and campaign objectives. The API is built with FastAPI and is ready for deployment using Gunicorn with Uvicorn workers.
+This project provides an API for generating personalized email sequences for Account-Based Marketing (ABM) campaigns. It uses Gemini to generate email content based on provided data, including account details, pain points, and campaign objectives. The API is built with FastAPI and is ready for deployment using Gunicorn with Uvicorn workers.
 
 ### **Features**
 
@@ -40,13 +37,13 @@ requirements.txt
 
 ### **Packages Used**
 
-- **aiohttp, aiosignal, async-timeout**: These are required for asynchronous I/O operations.
-- **FastAPI**: A modern web framework for building APIs with Python 3.7+ that focuses on performance, ease of use, and automatic generation of OpenAPI docs.
-- **gunicorn**: A WSGI HTTP server for UNIX used for running Python web applications.
-- **Jinja2**: A templating engine for Python, used here to render HTML templates.
-- **openai**: Used to interface with OpenAI's GPT model for generating email content.
-- **pydantic**: A data validation and parsing library that is used for request and response models.
-- **python-dotenv**: Used to load environment variables from a `.env` file for configuration management.
+- **aiohttp, aiosignal, async-timeout**: Required for asynchronous I/O operations.
+- **FastAPI**: Modern web framework for building APIs with Python 3.7+.
+- **gunicorn**: A WSGI HTTP server for running Python web applications.
+- **Jinja2**: Templating engine for Python, used to render HTML templates.
+- **Gemini**: Utilized to generate email content. Adjust the prompt for better personalization.
+- **pydantic**: Used for request and response models.
+- **python-dotenv**: For configuration management using environment variables.
 - **pytest, pytest-asyncio**: Testing libraries for writing unit and async tests.
 
 ### **How to Clone and Run the Project**
@@ -78,7 +75,7 @@ requirements.txt
 4. Set up your environment variables. Create a `.env` file in the root of the project directory and add the following:
 
    ```plaintext
-   OPENAI_API_KEY=<your_openai_api_key>
+   GEMINI_API_KEY=<your_gemini_api_key>
    ```
 
 #### **Running the Application Locally**
@@ -90,6 +87,14 @@ requirements.txt
    ```
 
 2. The application will be accessible at `http://127.0.0.1:8000/`. You can access the health check endpoint at `http://127.0.0.1:8000/health`.
+
+#### **Customizing the Gemini Prompt**
+To adjust the prompt sent to Gemini for better personalization, edit the prompt template in the services module. For example, in `app/services.py` locate the prompt configuration and modify it as needed:
+```python
+# ...existing code...
+prompt_template = "Hello, {customer_name}! Customize this message for a more personalized experience."
+# ...existing code...
+```
 
 #### **Deployment**
 
